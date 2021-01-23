@@ -6,14 +6,13 @@ import os
 
 def on_press(key):
     global outputString
-    outputString = outputString + str("{{\"time\":\"{0}\", \"key\":\"{1}\"}},".format(
-        time.time() - startTime, key))
-
-
-def on_release(key):
-    if key == Key.esc:
-        # Stop listener
-        return False
+    try:
+        outputString = outputString + str("{{\"time\":\"{0}\", \"key\":\"{1}\"}},".format(
+            time.time() - startTime, key.char))
+    except:
+        if key == Key.esc:
+            return False
+        print('Key pressed is not a character')
 
 
 outputString = ''
@@ -30,9 +29,7 @@ mixer.music.load(
     'C:/Users/aiive/Documents/Generative/Tentpole Shangrila/Assets/sound.mp3')
 mixer.music.play()
 # Collect events until released
-with Listener(
-        on_press=on_press,
-        on_release=on_release) as listener:
+with Listener(on_press=on_press) as listener:
     listener.join()
 outputString = outputString[:len(outputString)-1] + "]"
 outputFile.write(outputString)

@@ -6,6 +6,7 @@ import sys
 from SaveGifMod import SaveGif
 import os
 import json
+from subprocess import check_output
 
 
 def FormatColors(colorsHex):
@@ -28,15 +29,13 @@ def Clear():
 
 
 def Time_to_Frame(time):
-    return time * FRAMES_PER_SECOND
+    return math.floor(float(time) * FRAMES_PER_SECOND)
 
 
 class ShapeObject:
-    def __init__(self, keyPressObject, color, fill):
-        test1 = keyPressObject["key"]
-        test2 = keyPressInfo["keyValues"]
-        shapeOption = keyPressInfo["keyValues"][keyPressObject["key"]]
-        if "rectangle" in keyPressObject.shapeOption:
+    def __init__(self, keyPressObject, color, fill, dx=None, dy=None, dw=None, dh=None):
+        shapeOption = keyPressInfo[keyPressObject["key"]]
+        if "rectangle" in shapeOption:
             self.shape = Rectangle(
                 shapeOptions[shapeOption]["x0"],
                 shapeOptions[shapeOption]["y0"],
@@ -47,7 +46,18 @@ class ShapeObject:
                 shapeOptions[shapeOption]["wLambda"],
                 shapeOptions[shapeOption]["hLambda"],
                 color, fill)
-        self.frameStart = Time_to_Frame(keyPressObject.time)
+        self.frameStart = Time_to_Frame(keyPressObject["time"])
+        if dx is not None:
+            self.shape.dx = dx
+        if dy is not None:
+            self.shape.dy = dy
+        if dw is not None:
+            self.shape.dw = dw
+        if dh is not None:
+            self.shape.dh = dh
+
+    def Draw(self):
+        self.shape.Draw()
 
 
 class Rectangle:
@@ -62,6 +72,10 @@ class Rectangle:
         self.hLambda = hLambda
         self.color = color
         self.fill = fill
+        self.dx = 0
+        self.dy = 0
+        self.dw = 0
+        self.dh = 0
 
     def Draw(self):
         SetRGB(self.color)
@@ -70,6 +84,10 @@ class Rectangle:
             c.fill()
         else:
             c.stroke()
+        self.x = self.xLambda(self.x, self.dx)
+        self.y = self.yLambda(self.y, self.dy)
+        self.w = self.yLambda(self.w, self.dw)
+        self.w = self.yLambda(self.h, self.dh)
 
 
 FRAMES_PER_SECOND = 24
@@ -85,46 +103,41 @@ c = cairo.Context(s)
 # rectangle3d : quick vertical line that shoots down and expands across the screen horizontally
 # rectangle3l : quick vertical line that shoots left and expands across the screen vertically
 
-shapeOptions = {"rectangle1": {
-    "priority": 0,
-    "x0": 0,
-    "y0": 0,
-    "w0": WIDTH,
-    "h0": HEIGHT,
-    "xLambda": lambda x, dw: x + dw,
-    "yLambda": lambda y, dh: y-dh,
-    "wLambda": lambda w, dw: w-dw,
-    "hLambda": lambda h, dh: h-dh},
-    "rectangle2": {
-    "priority": 1,
-    "x0": 0,
-    "y0": 0,
-    "w0": 0,
-    "h0": 0,
-    "xLambda": lambda x, dw: x - dw,
-    "yLambda": lambda y, dh: y+dh,
-    "wLambda": lambda w, dw: w+dw,
-    "hLambda": lambda h, dh: h+dh}, }
-
 colors = FormatColors(["edf2fb", "e2eafc", "d7e3fc",
                        "ccdbfd", "c1d3fe", "b6ccfe", "abc4ff"])
 
 keyPressInfo = json.loads(open("keypressinfo.json").read())
 keyPresses = json.loads(open("keypresses.json").read())
 
-shapeObjects = np.zeros(len(keyPresses))
+shapeObjects = []
+dw = WIDTH / 100
+dh = HEIGHT / 100
 for i in range(len(keyPresses)):
-    shapeObjects[i] = (ShapeObject(
-        keyPresses[i], colors[i % len(colors)], True))
+    shapeObjects.append(ShapeObject(
+        keyPresses[i], colors[i % len(colors)], True, dw, dh, dw, dh))
 
 
-frames = 50
+frames = 500
 fileNames = []
 for frame in range(0, frames):
     bgColor = (0, 0, 0)
     Clear()
-    fileName = "output" + str(frame) + ".png"
+    for shapeObject in shapeObjects:
+        if frame >= shapeObject.frameStart:
+            shapeObject.Draw()
+    fileName = "output/" + str(frame) + ".png"
     s.write_to_png(fileName)
     fileNames.append(fileName)
+    print(str(100*frame/frames) + "%")
 # save gif
-SaveGif(fileNames, "output.gif", True)
+# SaveGif(fileNames, "output.gif", False)
+working_dir = os.path.dirname(os.path.realpath(__file__))
+command = "ffmpeg -y -framerate " + str(FRAMES_PER_SECOND) + " -i " + working_dir + \
+    "\\output\\%d.png " + working_dir + "\\output\\output.mp4"
+result = check_output(command, shell=True)
+command = "ffmpeg -y -i " + working_dir + "/output/output.mp4 -i " + \
+    working_dir + "/Assets/sound.mp3 -c copy -map 0:v:0 -map 1:a:0 " + \
+    working_dir + "/output/output_w_audio.mp4"
+result = check_output(command, shell=True)
+for filename in fileNames:
+    os.remove(filename)
